@@ -2,8 +2,8 @@
 import os
 import sys
 import getopt
+import itertools
 import xmlrpclib
-import time
 
 script_name = os.path.basename(sys.argv[0])
 NEOS_HOST = "www.neos-server.org"
@@ -14,15 +14,23 @@ client_string = "NEOS submission tool [https://github.com/wlxiong/neos-client]"
 
 def usage():
     help_string = """\
-usage: %s [options] [model_file|command_file]
-       -m,--model model_file [-d,--data data_file]
+usage: %s [options] model_file
+       %s [options] command_file
+       %s [options] -m model_file [-d data_file]
+       %s [options] -r command_file
+options:
+       -m,--model model_file
+       -d,--data data_file
        -r,--run command_file
        -g,--category category e.g. ip, nco
        -s,--solver solver e.g. gurobi, knitro
+       -c,--comments "comments"
+       -e,--email email_addr
+       -l,--list-solvers
        -D,--dry-run
        -v,--verbose
        -h,--help"""
-    print >> sys.stderr, help_string % script_name
+    print >> sys.stderr, help_string % tuple([script_name] * 4)
 
 
 def read_recursively(filepath, backtrace=None):
@@ -148,11 +156,27 @@ def submit(runpath, modelpath, datapath, category, solver, email, comments, verb
         send(xml, verbose)
 
 
+def list_solvers():
+    solver_fullname = neos.listAllSolvers()
+    ampl_solvers = []
+    for fullname in sorted(solver_fullname):
+        try:
+            category, solver, lang = fullname.split(':', 2)
+        except ValueError:
+            continue
+        if lang.upper() == 'AMPL':
+            ampl_solvers.append((category, solver))
+    category_fullname = neos.listCategories()
+    for category, solvers in itertools.groupby(ampl_solvers, lambda s: s[0]):
+        print "%s: %s" % (category, category_fullname.get(category, category))
+        print " ", ", ".join([solver for _, solver in solvers])
+
+
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "m:d:r:s:g:e:c:Dvh",
-                                   ["model=", "data", "run=", "solver=", "category=", "email=", "comments=",
-                                    "dry-run", "verbose", "help"])
+        opts, args = getopt.getopt(sys.argv[1:], "m:d:r:s:g:e:c:lDvh",
+                                   ["model=", "data=", "run=", "solver=", "category=", "email=", "comments=",
+                                    "list-solvers", "dry-run", "verbose", "help"])
     except getopt.GetoptError as err:
         # print help information and exit:
         print >> sys.stderr, str(err)
@@ -168,16 +192,6 @@ def main():
     model = None
     data = None
     run = None
-
-    if len(args):
-        _, ext = os.path.splitext(args[0])
-        if ext == '.run':
-            run = args[0]
-        elif ext == '.mod':
-            model = args[0]
-        else:
-            print >> sys.stderr, "%s: no input file ends with '.run' or '.mod'" % script_name
-            sys.exit(2)
 
     for o, a in opts:
         if o in ('-h', '--help'):
@@ -200,21 +214,33 @@ def main():
         elif o in ('-e', '--email'):
             email = a
         elif o in ('-c', '--comments'):
-            email = a
-
-    if solver is None:
-        print >> sys.stderr, "%s: no solver specified" % script_name
-        sys.exit(3)
-    if category is None:
-        print >> sys.stderr, "%s: no solver category specified" % script_name
-        sys.exit(4)
+            comments = a
+        elif o in ('-l', '--list-solvers'):
+            list_solvers()
+            sys.exit()
 
     if model is None and run is None:
-        print >> sys.stderr, "%s: no input file" % script_name
-        sys.exit(5)
+        if len(args):
+            _, ext = os.path.splitext(args[0])
+            if ext == '.run':
+                run = args[0]
+            elif ext == '.mod':
+                model = args[0]
+            else:
+                print >> sys.stderr, "%s: no input file ends with '.run' or '.mod'" % script_name
+                sys.exit(2)
+        else:
+            print >> sys.stderr, "%s: no input file" % script_name
+            sys.exit(3)
     if model is not None and run is not None:
         print >> sys.stderr, "%s: only one input file is needed:" % script_name, \
                              "model file (*.mod) or command file (*.run)"
+        sys.exit(4)
+    if solver is None:
+        print >> sys.stderr, "%s: no solver specified" % script_name
+        sys.exit(5)
+    if category is None:
+        print >> sys.stderr, "%s: no solver category specified" % script_name
         sys.exit(6)
 
     submit(run, model, data, category, solver, email, comments, verbose, dry_run)
