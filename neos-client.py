@@ -63,8 +63,14 @@ def read_recursively(filepath, backtrace=None):
             lines.append(line)
     return lines
 
-
 def parse_commands(runpath, lines):
+    """
+    The model is specified by a model file, and optionally,
+    a data file and a commands file. If the command file is specified
+    it must contain the AMPL solve command. However, the command file
+    must not contain the model or data commands. The model and data
+    are automatically set to (standard) named files by NEOS.
+    """
     modelpath = []
     datapath = []
     cmd_lines = []
@@ -128,16 +134,21 @@ template = """\
 
 
 def submit(runpath, modelpath, datapath, category, solver, email, comments, verbose=False, dry_run=False):
+    cmd_lines = []
+    datapaths = []
+    modelpaths = []
     if runpath is not None:
         if verbose:
             print >> sys.stderr, "Read commands: %s" % runpath
         cmd_lines = read_recursively(runpath)
         # print "command lines:", cmd_lines
         cmd_lines, modelpaths, datapaths = parse_commands(runpath, cmd_lines)
-    else:
-        cmd_lines = []
-        modelpaths = [modelpath] if modelpath is not None else []
-        datapaths = [datapath] if datapath is not None else []
+    # use data and model files from command line if specified
+    datapaths = [datapath] if datapath is not None else datapaths
+    modelpaths = [modelpath] if modelpath is not None else modelpaths
+    if not modelpaths:
+        print >> sys.stderr, "Error: no model file is specified."
+        sys.exit(4)
     if verbose:
         if modelpaths:
             print >> sys.stderr, "Read models: %s" % ", ".join(modelpaths)
@@ -217,7 +228,7 @@ def main():
             comments = a
         elif o in ('-l', '--list-solvers'):
             list_solvers()
-            sys.exit()
+            sys.exit(0)
 
     if model is None and run is None:
         if len(args):
@@ -232,10 +243,6 @@ def main():
         else:
             print >> sys.stderr, "%s: no input file" % script_name
             sys.exit(3)
-    if model is not None and run is not None:
-        print >> sys.stderr, "%s: only one input file is needed:" % script_name, \
-                             "model file (*.mod) or command file (*.run)"
-        sys.exit(4)
     if solver is None:
         print >> sys.stderr, "%s: no solver specified" % script_name
         sys.exit(5)
