@@ -25,6 +25,7 @@ options:
        -g,--category category e.g. ip, nco
        -s,--solver solver e.g. gurobi, knitro
        -c,--comments "comments"
+       -p,--priority short|long, default: short
        -e,--email email_addr
        -l,--list-solvers
        -D,--dry-run
@@ -121,7 +122,7 @@ template = """\
 <solver>%(solver)s</solver>
 <inputType>AMPL</inputType>
 <client>%(client)s</client>
-<priority>long</priority>
+<priority>%(priority)s</priority>
 <email>%(email)s</email>
 
 <model><![CDATA[%(model)s]]></model>
@@ -133,7 +134,7 @@ template = """\
 """
 
 
-def submit(runpath, modelpath, datapath, category, solver, email, comments, verbose=False, dry_run=False):
+def submit(runpath, modelpath, datapath, category, solver, email, comments, priority, verbose=False, dry_run=False):
     cmd_lines = []
     datapaths = []
     modelpaths = []
@@ -160,7 +161,7 @@ def submit(runpath, modelpath, datapath, category, solver, email, comments, verb
     data = "".join(dat_lines)
     commands = "".join(cmd_lines)
     xml = template % {'category': category, 'solver': solver, 'email': email, 'client': client_string,
-                      'comments': comments, 'model': model, 'data': data, 'commands': commands}
+                      'priority': priority, 'comments': comments, 'model': model, 'data': data, 'commands': commands}
     if dry_run:
         print xml
     else:
@@ -185,8 +186,8 @@ def list_solvers():
 
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "m:d:r:s:g:e:c:lDvh",
-                                   ["model=", "data=", "run=", "solver=", "category=", "email=", "comments=",
+        opts, args = getopt.getopt(sys.argv[1:], "m:d:r:s:g:e:c:p:lDvh",
+                                   ["model=", "data=", "run=", "solver=", "category=", "email=", "comments=", "priority="
                                     "list-solvers", "dry-run", "verbose", "help"])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -196,6 +197,7 @@ def main():
 
     verbose = False
     dry_run = False
+    priority = "short"
     comments = ""
     category = None
     solver = None
@@ -226,6 +228,8 @@ def main():
             email = a
         elif o in ('-c', '--comments'):
             comments = a
+        elif o in ('-p', '--priority'):
+            priority = a
         elif o in ('-l', '--list-solvers'):
             list_solvers()
             sys.exit(0)
@@ -250,7 +254,7 @@ def main():
         print >> sys.stderr, "%s: no solver category specified" % script_name
         sys.exit(6)
 
-    submit(run, model, data, category, solver, email, comments, verbose, dry_run)
+    submit(run, model, data, category, solver, email, comments, priority, verbose, dry_run)
 
 
 if __name__ == "__main__":
